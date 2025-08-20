@@ -23,6 +23,7 @@ let showSpheres = false;
 let showClouds = false;
 // Biến trạng thái mới để điều khiển hiển thị 3D
 let is3DView = false;
+let pyramidTransitionProgress = 0;
 
 // Các tham số cấu hình cho nguyên tử Nito và Hydro
 const nInnerRadius = 50; // Bán kính tương đối của vòng electron trong của N
@@ -112,11 +113,10 @@ function createUI() {
     overlapButton = createButton("Bật xen phủ");
     styleButton(overlapButton);
     overlapButton.mousePressed(() => {
-        // Chỉ có thể bật/tắt xen phủ sau khi mô phỏng đã hoàn thành
         if (state === "done") {
             showClouds = !showClouds;
             if (showClouds) {
-                showSpheres = false; // Tắt lớp cầu khi bật xen phủ
+                showSpheres = false;
                 is3DView = false;
                 overlapButton.html("Tắt xen phủ");
                 sphereButton.html("Bật lớp cầu");
@@ -129,20 +129,18 @@ function createUI() {
     sphereButton = createButton("Bật lớp cầu");
     styleButton(sphereButton);
     sphereButton.mousePressed(() => {
-        // Bật/tắt lớp cầu có thể thực hiện bất cứ lúc nào
         if (state !== "animating" && state !== "bonding") {
             showSpheres = !showSpheres;
             if (showSpheres) {
-                showClouds = false; // Tắt đám mây khi bật lớp cầu
+                showClouds = false;
+                is3DView = true;
+                pyramidTransitionProgress = 0; // Bắt đầu quá trình chuyển đổi
                 sphereButton.html("Tắt lớp cầu");
                 overlapButton.html("Bật xen phủ");
-                // Cập nhật vị trí các nguyên tử H về cấu trúc 3D chỉ khi ở trạng thái done
-                if (state === "done") {
-                    is3DView = true;
-                }
             } else {
-                sphereButton.html("Bật lớp cầu");
                 is3DView = false;
+                pyramidTransitionProgress = 0; // Đặt lại tiến trình
+                sphereButton.html("Bật lớp cầu");
             }
         }
     });
@@ -287,7 +285,6 @@ function resetSimulation() {
         createVector(0, initialDistance, 0)
     ];
 
-    // Tạo các vị trí 3D cho các nguyên tử H dựa trên hình chóp tam giác
     const bondAngle = radians(107.8);
     const zOffset = bondDistance * cos(PI - bondAngle / 2);
     const radiusOfBase = bondDistance * sin(PI - bondAngle / 2);
@@ -312,6 +309,7 @@ function resetSimulation() {
     panY = -100;
     previousMouseX = mouseX;
     previousMouseY = mouseY;
+    pyramidTransitionProgress = 0;
 
     showClouds = false;
     showSpheres = false;
@@ -366,19 +364,29 @@ function draw() {
             state = "done";
         }
     }
-
-    // Cập nhật vị trí 3D cho Hydro nếu đang ở chế độ 3D và đã hoàn tất
+    
     if (is3DView && state === "done") {
+        if (pyramidTransitionProgress < 1) {
+            pyramidTransitionProgress += 0.02; // Tốc độ chuyển đổi
+        } else {
+            pyramidTransitionProgress = 1;
+        }
+        let t_pyramid = easeInOutQuad(pyramidTransitionProgress);
         hAtoms.forEach(hAtom => {
-            hAtom.pos = hAtom.pyramidPos.copy();
+            hAtom.pos = p5.Vector.lerp(hAtom.donePos, hAtom.pyramidPos, t_pyramid);
         });
     } else if (!is3DView && state === "done") {
+        if (pyramidTransitionProgress > 0) {
+            pyramidTransitionProgress -= 0.02;
+        } else {
+            pyramidTransitionProgress = 0;
+        }
+        let t_pyramid = easeInOutQuad(pyramidTransitionProgress);
         hAtoms.forEach(hAtom => {
-            hAtom.pos = hAtom.donePos.copy();
+            hAtom.pos = p5.Vector.lerp(hAtom.donePos, hAtom.pyramidPos, t_pyramid);
         });
     }
 
-    // Luôn xoay các lớp cầu và đám mây khi chúng được hiển thị
     if (showClouds) {
         cloudRotationAngle += fastSpinSpeed;
     }
@@ -387,7 +395,6 @@ function draw() {
         hSphereRotation += sphereRotationSpeed;
     }
 
-    // Vẽ tất cả các nguyên tử
     for (let atom of atoms) {
         push();
         translate(atom.pos.x, atom.pos.y, atom.pos.z);
@@ -395,12 +402,10 @@ function draw() {
         pop();
     }
     
-    // Chỉ vẽ các cặp electron liên kết khi mô phỏng đã hoàn tất
     if (state !== "idle" && state !== "animating" && !showSpheres) {
         drawBondingElectrons();
     }
 
-    // Vẽ đám mây hoặc lớp cầu tùy thuộc vào biến trạng thái mới
     if (showClouds) {
         drawElectronClouds();
     }
@@ -422,7 +427,6 @@ function drawLabels() {
     drawBillboardText(nAtom.label, nAtom.pos.x, nAtom.pos.y + nOuterRadius + labelOffset, nAtom.pos.z);
     
     hAtoms.forEach(hAtom => {
-        // Offset nhãn Hydro để không bị chồng lên các lớp cầu
         drawBillboardText(hAtom.label, hAtom.pos.x, hAtom.pos.y + hOuterRadius + labelOffset, hAtom.pos.z);
     });
 }
@@ -518,6 +522,7 @@ function drawElectronClouds() {
 
     push();
     translate(nAtom.pos.x, nAtom.pos.y, nAtom.pos.z);
+    // Sử dụng ma trận để xoay liên tục
     rotateZ(cloudRotationAngle);
     noStroke();
     fill(blendedColor);
@@ -527,6 +532,7 @@ function drawElectronClouds() {
     hAtoms.forEach(hAtom => {
         push();
         translate(hAtom.pos.x, hAtom.pos.y, hAtom.pos.z);
+        // Sử dụng ma trận để xoay liên tục
         rotateZ(cloudRotationAngle);
         noStroke();
         fill(blendedColor);
@@ -539,26 +545,17 @@ function drawElectronSpheres() {
     const nAtom = atoms.find(a => a.label === "N");
     const hAtoms = atoms.filter(a => a.label === "H");
 
-    let lightGreen = color(144, 238, 144);
     const nOrbitalRadius = nOuterRadius;
     const hOrbitalRadius = hOuterRadius;
+    const detail = 60;
     
     // Nito
     push();
     translate(nAtom.pos.x, nAtom.pos.y, nAtom.pos.z);
     rotateY(nSphereRotation);
     noStroke();
-    fill(lightGreen);
-    sphere(nOrbitalRadius);
-    pop();
-    
-    push();
-    translate(nAtom.pos.x, nAtom.pos.y, nAtom.pos.z);
-    rotateY(nSphereRotation);
-    stroke(255);
-    strokeWeight(0.75);
-    noFill();
-    sphere(nOrbitalRadius);
+    fill(nAtom.electronCol);
+    sphere(nOrbitalRadius, detail, detail);
     pop();
     
     // Hydro
@@ -567,17 +564,8 @@ function drawElectronSpheres() {
         translate(hAtom.pos.x, hAtom.pos.y, hAtom.pos.z);
         rotateY(hSphereRotation);
         noStroke();
-        fill(lightGreen);
-        sphere(hOrbitalRadius);
-        pop();
-        
-        push();
-        translate(hAtom.pos.x, hAtom.pos.y, hAtom.pos.z);
-        rotateY(hSphereRotation);
-        stroke(255);
-        strokeWeight(0.75);
-        noFill();
-        sphere(hOrbitalRadius);
+        fill(hAtom.electronCol);
+        sphere(hOrbitalRadius, detail, detail);
         pop();
     });
 }
@@ -662,17 +650,17 @@ class Atom {
         pop();
         pop();
         
-        // Ẩn các đường tròn và electron khi lớp cầu được bật
         if (!showSpheres) {
             for (let i = 0; i < this.shells.length; i++) {
-                noFill();
-                stroke(255);
-                strokeWeight(1);
-
-                let radius = this.shellRadii[i];
-                push();
-                drawSmoothCircle(radius);
-                pop();
+                if (!(this.label === "N" && i === this.shells.length - 1 && showClouds)) {
+                    noFill();
+                    stroke(255);
+                    strokeWeight(1);
+                    let radius = this.shellRadii[i];
+                    push();
+                    drawSmoothCircle(radius);
+                    pop();
+                }
             }
             noStroke();
 
@@ -696,7 +684,7 @@ class Atom {
                     }
                 }
 
-                if (this.label === "N") {
+                if (this.label === "N" && !showClouds) {
                     let nonSharedElectrons = this.shells.at(-1).filter(el => !el.isShared);
                     if (nonSharedElectrons.length > 0) {
                         const nonBondingPairAngles = [radians(270) - radians(10), radians(270) + radians(10)];
