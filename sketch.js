@@ -281,9 +281,26 @@ function resetSimulation() {
     atoms = [];
     atoms.push(new Atom(0, 0, "N", 7, [2, 5], color(0, 191, 255)));
 
-    atoms.push(new Atom(-initialDistance, 0, "H", 1, [1], color(255, 255, 255)));
-    atoms.push(new Atom(initialDistance, 0, "H", 1, [1], color(255, 255, 255)));
-    atoms.push(new Atom(0, initialDistance, "H", 1, [1], color(255, 255, 255)));
+    const hInitialPositions = [
+        createVector(-initialDistance, 0, 0),
+        createVector(initialDistance, 0, 0),
+        createVector(0, initialDistance, 0)
+    ];
+
+    // Tạo các vị trí 3D cho các nguyên tử H dựa trên hình chóp tam giác
+    const bondAngle = radians(107.8);
+    const zOffset = bondDistance * cos(PI - bondAngle / 2);
+    const radiusOfBase = bondDistance * sin(PI - bondAngle / 2);
+    
+    const hFinalPositions3D = [
+        createVector(radiusOfBase * cos(radians(0)), radiusOfBase * sin(radians(0)), zOffset),
+        createVector(radiusOfBase * cos(radians(120)), radiusOfBase * sin(radians(120)), zOffset),
+        createVector(radiusOfBase * cos(radians(240)), radiusOfBase * sin(radians(240)), zOffset)
+    ];
+
+    atoms.push(new Atom(hInitialPositions[0].x, hInitialPositions[0].y, "H", 1, [1], color(255, 255, 255), hFinalPositions3D[0]));
+    atoms.push(new Atom(hInitialPositions[1].x, hInitialPositions[1].y, "H", 1, [1], color(255, 255, 255), hFinalPositions3D[1]));
+    atoms.push(new Atom(hInitialPositions[2].x, hInitialPositions[2].y, "H", 1, [1], color(255, 255, 255), hFinalPositions3D[2]));
 
     state = "idle";
     progress = 0;
@@ -566,7 +583,7 @@ function drawElectronSpheres() {
 }
 
 class Atom {
-    constructor(x, y, label, protons, shellCounts, electronCol) {
+    constructor(x, y, label, protons, shellCounts, electronCol, pyramidPos = null) {
         this.pos = createVector(x, y, 0);
         this.initialPos = createVector(x, y, 0);
         this.label = label;
@@ -625,31 +642,8 @@ class Atom {
         
         if (this.label === "H") {
             this.finalPos = p5.Vector.mult(p5.Vector.sub(createVector(0,0,0), this.initialPos).normalize(), -bondDistance);
-
             this.donePos = this.finalPos.copy();
-
-            const bondLength = p5.Vector.dist(createVector(0,0,0), this.donePos);
-            const bondAngle = radians(107.8);
-            
-            let finalX, finalY, finalZ;
-            let currentAngle = degrees(this.initialPos.heading());
-
-            finalZ = -bondLength * cos(PI - bondAngle / 2);
-            const radiusOfBase = bondLength * sin(PI - bondAngle / 2);
-
-            let baseAngle;
-            if (abs(currentAngle - 180) < 1) {
-                baseAngle = radians(180);
-            } else if (abs(currentAngle - 0) < 1) {
-                baseAngle = radians(0);
-            } else {
-                baseAngle = radians(270);
-            }
-            
-            finalX = radiusOfBase * cos(baseAngle);
-            finalY = radiusOfBase * sin(baseAngle);
-            
-            this.pyramidPos = createVector(finalX, finalY, finalZ);
+            this.pyramidPos = pyramidPos;
         }
     }
 
