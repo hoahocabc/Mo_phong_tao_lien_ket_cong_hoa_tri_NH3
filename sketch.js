@@ -103,7 +103,8 @@ function createUI() {
             overlapButton.html("Bật xen phủ");
         }
     });
-
+    
+    // Nút Reset được đặt ngay sau nút Play
     resetButton = createButton("↺ Reset");
     styleButton(resetButton);
     resetButton.mousePressed(() => {
@@ -268,10 +269,11 @@ function styleInstructionsButton(btn) {
 
 function positionButtons() {
     playButton.position(20, 20);
-    resetButton.position(20, 60);
-    overlapButton.position(20, 100);
-    sphereButton.position(20, 140);
-    labelButton.position(20, 180);
+    overlapButton.position(20, 60);
+    sphereButton.position(20, 100);
+    labelButton.position(20, 140);
+    // Thay đổi vị trí nút Reset và Hướng dẫn
+    resetButton.position(20, 180); 
     instructionsButton.position(20, 220);
 }
 
