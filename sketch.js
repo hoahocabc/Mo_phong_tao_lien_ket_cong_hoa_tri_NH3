@@ -2,7 +2,7 @@
 // Tác giả: Gemini
 
 let fontRegular;
-let playButton, resetButton, instructionsButton, overlapButton, sphereButton, labelButton;
+let playButton, resetButton, instructionsButton, overlapButton, sphereButton, labelButton, spinButton;
 let titleDiv, footerDiv, instructionsPopup;
 let atoms = [];
 let state = "idle";
@@ -24,6 +24,11 @@ let showClouds = false;
 // Biến trạng thái mới để điều khiển hiển thị 3D
 let is3DView = false;
 let pyramidTransitionProgress = 0;
+
+// Biến trạng thái mới để điều khiển quay electron
+let isElectronSpinning = true;
+// Biến mới để lưu góc quay hiện tại của electron
+let electronSpinAngle = 0;
 
 // Các tham số cấu hình cho nguyên tử Nito và Hydro
 const nInnerRadius = 50; // Bán kính tương đối của vòng electron trong của N
@@ -103,12 +108,25 @@ function createUI() {
             overlapButton.html("Bật xen phủ");
         }
     });
+
+    // Nút Bật/Tắt quay electron
+    spinButton = createButton("Tắt quay electron");
+    styleButton(spinButton);
+    spinButton.mousePressed(() => {
+        isElectronSpinning = !isElectronSpinning;
+        if (isElectronSpinning) {
+            spinButton.html("Tắt quay electron");
+        } else {
+            spinButton.html("Bật quay electron");
+        }
+    });
     
     // Nút Reset được đặt ngay sau nút Play
     resetButton = createButton("↺ Reset");
     styleButton(resetButton);
     resetButton.mousePressed(() => {
-        resetSimulation();
+        // Hàm này sẽ tải lại trang, đưa mọi thứ về trạng thái ban đầu
+        window.location.reload();
     });
 
     overlapButton = createButton("Bật xen phủ");
@@ -188,7 +206,7 @@ function createUI() {
             <li style="margin-bottom: 10px;">• Nhấn nút "Reset" để quay lại trạng thái ban đầu.</li>
             <li style="margin-bottom: 10px;">• Nhấn nút "Bật xen phủ" để hiển thị đám mây electron liên kết.</li>
             <li style="margin-bottom: 10px;">• Nhấn nút "Bật lớp cầu" để hiển thị lớp electron hóa trị dưới dạng mặt cầu.</li>
-            <li style="margin-bottom: 10px;">• Nhấn nút "Bật/Tắt nhãn" để hiển thị/ẩn tên nguyên tử.</li>
+            <li style="margin-bottom: 10px;">• Nhấn nút "Bật/Tắt quay electron" để dừng/tiếp tục chuyển động của electron.</li>
         </ul>
         <button id="closePopup" style="display: block; width: 100%; padding: 10px; margin-top: 20px; font-size: 16px; border: none; border-radius: 6px; background-color: #36d1dc; color: #fff; cursor: pointer;">Đóng</button>
     `;
@@ -202,7 +220,7 @@ function createUI() {
 }
 
 function styleButton(btn) {
-    btn.style("width", "80px");
+    btn.style("width", "130px");
     btn.style("height", "30px");
     btn.style("padding", "0px");
     btn.style("font-size", "12px");
@@ -233,7 +251,7 @@ function styleButton(btn) {
 }
 
 function styleInstructionsButton(btn) {
-    btn.style("width", "80px");
+    btn.style("width", "130px");
     btn.style("height", "30px");
     btn.style("padding", "0px");
     btn.style("font-size", "12px");
@@ -269,12 +287,12 @@ function styleInstructionsButton(btn) {
 
 function positionButtons() {
     playButton.position(20, 20);
-    overlapButton.position(20, 60);
-    sphereButton.position(20, 100);
-    labelButton.position(20, 140);
-    // Thay đổi vị trí nút Reset và Hướng dẫn
-    resetButton.position(20, 180); 
-    instructionsButton.position(20, 220);
+    spinButton.position(20, 60);
+    overlapButton.position(20, 100);
+    sphereButton.position(20, 140);
+    labelButton.position(20, 180);
+    resetButton.position(20, 220); 
+    instructionsButton.position(20, 260);
 }
 
 function resetSimulation() {
@@ -321,6 +339,10 @@ function resetSimulation() {
     
     showLabels = true;
     labelButton.html("Tắt nhãn");
+    
+    isElectronSpinning = true;
+    spinButton.html("Tắt quay electron");
+    electronSpinAngle = 0;
 }
 
 function draw() {
@@ -388,11 +410,10 @@ function draw() {
             hAtom.pos = p5.Vector.lerp(hAtom.donePos, hAtom.pyramidPos, t_pyramid);
         });
     }
-
-    if (showClouds) {
+    
+    if (isElectronSpinning) {
+        electronSpinAngle += slowSpinSpeed;
         cloudRotationAngle += fastSpinSpeed;
-    }
-    if (showSpheres) {
         nSphereRotation += sphereRotationSpeed;
         hSphereRotation += sphereRotationSpeed;
     }
@@ -400,7 +421,7 @@ function draw() {
     for (let atom of atoms) {
         push();
         translate(atom.pos.x, atom.pos.y, atom.pos.z);
-        atom.show(bondingProgress, state);
+        atom.show(bondingProgress, state, electronSpinAngle);
         pop();
     }
     
@@ -637,7 +658,7 @@ class Atom {
         }
     }
 
-    show(bondingProgress, state) {
+    show(bondingProgress, state, spinAngle) {
         push();
         fill(255, 0, 0);
         let nucleusSize = (this.label === "H") ? 20 : 30;
@@ -669,13 +690,11 @@ class Atom {
             const electronSize = 6;
             
             if (state === "bonding" || state === "done") {
-                let t_bonding = easeInOutQuad(bondingProgress);
-
                 if(this.label === "N") {
                     let innerShell = this.shells[0];
                     for (let j = 0; j < innerShell.length; j++) {
                         let e = innerShell[j];
-                        let angle = (TWO_PI / innerShell.length) * j + (frameCount * slowSpinSpeed);
+                        let angle = (TWO_PI / innerShell.length) * j + spinAngle;
                         let ex = cos(angle) * this.shellRadii[0];
                         let ey = sin(angle) * this.shellRadii[0];
                         push();
@@ -685,7 +704,7 @@ class Atom {
                         pop();
                     }
                 }
-
+                
                 if (this.label === "N" && !showClouds) {
                     let nonSharedElectrons = this.shells.at(-1).filter(el => !el.isShared);
                     if (nonSharedElectrons.length > 0) {
@@ -709,7 +728,7 @@ class Atom {
                     let radius = this.shellRadii[i];
                     for (let j = 0; j < this.shells[i].length; j++) {
                         let e = this.shells[i][j];
-                        let angle = (TWO_PI / this.shells[i].length) * j + (frameCount * slowSpinSpeed);
+                        let angle = (TWO_PI / this.shells[i].length) * j + spinAngle;
                         let ex = cos(angle) * radius;
                         let ey = sin(angle) * radius;
                         
