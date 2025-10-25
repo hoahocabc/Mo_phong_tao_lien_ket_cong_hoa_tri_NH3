@@ -1,6 +1,3 @@
-// Mô phỏng liên kết cộng hóa trị của phân tử NH3
-// Tác giả: Gemini
-
 let fontRegular;
 let playButton, resetButton, instructionsButton, overlapButton, sphereButton, labelButton, spinButton;
 let titleDiv, footerDiv, instructionsPopup;
@@ -66,7 +63,7 @@ function setup() {
     textAlign(CENTER, CENTER);
     noStroke();
 
-    titleDiv = createDiv("MÔ PHỎNG LIÊN KẾT CỘNG HOÁ TRỊ NH₃");
+    titleDiv = createDiv("MÔ PHỎNG LIÊN KẾT CỘNG HOÁ TRỊ TRONG PHÂN TỬ NH₃");
     titleDiv.style("position", "absolute");
     titleDiv.style("top", "10px");
     titleDiv.style("width", "100%");
@@ -359,8 +356,15 @@ function draw() {
 
     translate(panX, panY);
 
+    // Ambient is always present
     ambientLight(80);
-    pointLight(255, 255, 255, 0, 0, 300);
+    // Remove fixed point light when rendering the sphere layer:
+    // If showSpheres is true we rely on the two moving directional lights inside drawElectronSpheres()
+    // (matching the approach from File 1). Otherwise keep the existing fixed point light so non-sphere
+    // views remain illuminated similarly to before.
+    if (!showSpheres) {
+        pointLight(255, 255, 255, 0, 0, 300);
+    }
 
     const nAtom = atoms.find(a => a.label === "N");
     const hAtoms = atoms.filter(a => a.label === "H");
@@ -564,31 +568,69 @@ function drawElectronClouds() {
     });
 }
 
+// Modified drawElectronSpheres: adopt lighting approach from "file 1"
+// - Two moving directional lights + ambient
+// - Use ambientMaterial to preserve sphere color and specularMaterial slightly brighter for highlights
+// - Keep sphere geometry/rotation as before
 function drawElectronSpheres() {
     const nAtom = atoms.find(a => a.label === "N");
     const hAtoms = atoms.filter(a => a.label === "H");
 
-    const nOrbitalRadius = nOuterRadius;
-    const hOrbitalRadius = hOuterRadius;
-    const detail = 60;
-    
-    // Nito
+    if (!nAtom) return;
+
+    // Slightly stronger ambient (a bit brighter)
+    ambientLight(80);
+
+    // TWO MOVING DIRECTIONAL LIGHTS (dynamic highlights) — positions change with frameCount
+    // Light A: slower, wider orbit (soft fill) — raised intensity
+    let aA = frameCount * 0.010;
+    let LAx = cos(aA) * 380;
+    let LAy = sin(aA) * 240;
+    directionalLight(140, 140, 140, LAx, LAy, -0.25);
+
+    // Light B: faster, tighter orbit and different phase (secondary fill) — raised a bit
+    let aB = frameCount * 0.018 + PI / 4;
+    let LBx = cos(aB) * 210;
+    let LBy = sin(aB) * 170;
+    directionalLight(90, 90, 90, -LBx, -LBy, 0.2);
+
+    // Render N sphere
     push();
     translate(nAtom.pos.x, nAtom.pos.y, nAtom.pos.z);
     rotateY(nSphereRotation);
     noStroke();
-    fill(nAtom.electronCol);
-    sphere(nOrbitalRadius, detail, detail);
+    shininess(85);
+
+    // Preserve the existing color of the sphere (nAtom.electronCol)
+    const nr = red(nAtom.electronCol);
+    const ng = green(nAtom.electronCol);
+    const nb = blue(nAtom.electronCol);
+
+    ambientMaterial(nr, ng, nb);
+    // Make specular slightly brighter than base color for clearer highlights
+    specularMaterial(min(255, nr + 45), min(255, ng + 45), min(255, nb + 45));
+
+    let nOrbitalRadius = nOuterRadius;
+    sphere(nOrbitalRadius, 60, 60);
     pop();
-    
-    // Hydro
+
+    // Render H spheres
     hAtoms.forEach(hAtom => {
         push();
         translate(hAtom.pos.x, hAtom.pos.y, hAtom.pos.z);
         rotateY(hSphereRotation);
         noStroke();
-        fill(hAtom.electronCol);
-        sphere(hOrbitalRadius, detail, detail);
+        shininess(85);
+
+        const hr = red(hAtom.electronCol);
+        const hg = green(hAtom.electronCol);
+        const hb = blue(hAtom.electronCol);
+
+        ambientMaterial(hr, hg, hb);
+        specularMaterial(min(255, hr + 45), min(255, hg + 45), min(255, hb + 45));
+
+        let hOrbitalRadius = hOuterRadius;
+        sphere(hOrbitalRadius, 60, 60);
         pop();
     });
 }
